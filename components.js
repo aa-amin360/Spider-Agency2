@@ -1,165 +1,306 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  CONTENT_STORAGE_KEY,
+  cloneData,
+  createInitialForm,
+  defaultContent,
+  itemTemplates,
+  loadStoredContent,
+  normalizeContent,
+} from "./content.js";
 
 const e = React.createElement;
 
-const siteConfig = {
-  name: "Spider Agency",
-  email: "hello@spideragency.dev",
-  location: "Dhaka, Bangladesh",
-  responseTime: "Typical reply time: within 24 hours",
-  calendarUrl: "",
-};
-
-const navItems = [
-  { label: "Services", href: "#services" },
-  { label: "Work", href: "#work" },
-  { label: "Process", href: "#process" },
-  { label: "Testimonials", href: "#testimonials" },
-  { label: "Contact", href: "#contact" },
-];
-
-const services = [
-  {
-    title: "AI Automation",
-    description:
-      "We design workflow automations, internal copilots, and AI-powered operations that remove repetitive work.",
-    outcomes: ["Lead routing", "Sales ops automation", "Support workflows"],
-  },
-  {
-    title: "Web Design and Development",
-    description:
-      "Launch-ready marketing sites, SaaS dashboards, and custom web apps built for clarity, speed, and conversion.",
-    outcomes: ["Landing pages", "Product sites", "Custom frontends"],
-  },
-  {
-    title: "Growth Systems",
-    description:
-      "We connect analytics, CRM flows, and conversion experiments so you can measure what is working and scale it.",
-    outcomes: ["Analytics setup", "CRO experiments", "Reporting systems"],
-  },
-  {
-    title: "Cloud and DevOps",
-    description:
-      "Infrastructure planning, deployment pipelines, monitoring, and performance hardening for fast-moving teams.",
-    outcomes: ["Deploy pipelines", "Performance reviews", "Observability"],
-  },
-  {
-    title: "Product Strategy",
-    description:
-      "From offer positioning to roadmap shaping, we turn scattered ideas into a scoped delivery plan your team can execute.",
-    outcomes: ["Feature scoping", "Technical discovery", "Roadmap support"],
-  },
-  {
-    title: "Retained Delivery",
-    description:
-      "Need a hands-on technical partner every month? We support ongoing builds, experiments, and optimization work.",
-    outcomes: ["Monthly sprints", "Priority support", "Continuous iteration"],
-  },
-];
-
-const projects = [
-  {
-    title: "Revenue-Focused SaaS Site",
-    industry: "B2B SaaS",
-    summary:
-      "Rebuilt a confusing product site into a clear conversion path with stronger messaging, demo CTAs, and cleaner analytics.",
-    results: ["Faster page load", "Clearer user journeys", "Better-qualified leads"],
-  },
-  {
-    title: "Operations Automation Stack",
-    industry: "Service Business",
-    summary:
-      "Connected forms, CRM, email routing, and delivery alerts into one automated client onboarding workflow.",
-    results: ["Less manual admin", "Faster response time", "Cleaner project handoffs"],
-  },
-  {
-    title: "Lead Capture Microsystem",
-    industry: "Growth Team",
-    summary:
-      "Designed a lightweight funnel with targeted messaging, booking logic, and segmentation to improve inbound quality.",
-    results: ["Sharper messaging", "Smarter lead intake", "More usable pipeline data"],
-  },
-];
-
-const processSteps = [
-  {
-    title: "Discover",
-    copy: "We align on your offer, bottlenecks, audience, and business goals before making technical decisions.",
-  },
-  {
-    title: "Scope",
-    copy: "You get a delivery plan with priorities, responsibilities, and the fastest route to a useful first release.",
-  },
-  {
-    title: "Build",
-    copy: "We design, implement, and test the system with attention to performance, clarity, and maintainability.",
-  },
-  {
-    title: "Launch",
-    copy: "We handle polish, QA, and rollout support so the handoff feels calm instead of chaotic.",
-  },
-  {
-    title: "Optimize",
-    copy: "After launch, we improve conversion, automation quality, and reporting based on real usage data.",
-  },
-];
-
-const testimonials = [
-  {
-    quote:
-      "Spider Agency turned a vague idea into a polished site and a much cleaner lead flow. The project felt organized from day one.",
-    name: "Amin Rahman",
-    role: "Founder, B2B Studio",
-  },
-  {
-    quote:
-      "The automation work removed hours of repetitive admin every week. We finally have a process that scales with the team.",
-    name: "Sarah Malik",
-    role: "Operations Lead",
-  },
-  {
-    quote:
-      "Strong communication, smart technical judgment, and real follow-through. We shipped faster than expected without sacrificing quality.",
-    name: "Jonathan Reed",
-    role: "Product Consultant",
-  },
-];
-
-const faqs = [
-  {
-    question: "What kinds of clients are the best fit?",
-    answer:
-      "Teams that already have demand or a clear offer usually get the most value. We work best when there is a real business goal behind the build.",
-  },
-  {
-    question: "Can you handle both strategy and execution?",
-    answer:
-      "Yes. We can help define the scope, shape the user experience, build the site or system, and support launch and iteration.",
-  },
-  {
-    question: "Do you offer ongoing support?",
-    answer:
-      "Yes. We can stay involved through a monthly retainer for optimization, new features, performance improvements, and technical support.",
-  },
-  {
-    question: "How quickly can we start?",
-    answer:
-      "Small projects can often start quickly. Larger builds usually begin with a short discovery step so the execution phase stays focused.",
-  },
-];
-
-const initialForm = {
-  name: "",
-  company: "",
-  email: "",
-  service: services[0].title,
-  budget: "",
-  timeline: "",
-  message: "",
-};
-
 function classNames(...values) {
   return values.filter(Boolean).join(" ");
+}
+
+function getValueAtPath(source, path) {
+  return path.reduce((current, key) => current[key], source);
+}
+
+function setValueAtPath(source, path, value) {
+  const nextValue = cloneData(source);
+  let cursor = nextValue;
+
+  for (let index = 0; index < path.length - 1; index += 1) {
+    cursor = cursor[path[index]];
+  }
+
+  cursor[path[path.length - 1]] = value;
+  return nextValue;
+}
+
+function moveItem(items, index, direction) {
+  const targetIndex = index + direction;
+
+  if (targetIndex < 0 || targetIndex >= items.length) {
+    return items;
+  }
+
+  const nextItems = items.slice();
+  const [item] = nextItems.splice(index, 1);
+  nextItems.splice(targetIndex, 0, item);
+  return nextItems;
+}
+
+function applyMetadata(content) {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  document.title = content.seo.title;
+
+  const descriptionTag = document.querySelector('meta[name="description"]');
+  const themeColorTag = document.querySelector('meta[name="theme-color"]');
+
+  if (descriptionTag) {
+    descriptionTag.setAttribute("content", content.seo.description);
+  }
+
+  if (themeColorTag) {
+    themeColorTag.setAttribute("content", content.seo.themeColor);
+  }
+}
+
+function AdminField({
+  label,
+  value,
+  onChange,
+  multiline = false,
+  rows = 4,
+  type = "text",
+  placeholder = "",
+  hint = "",
+  className = "",
+  hideLabel = false,
+}) {
+  const commonProps = {
+    className: classNames("admin-input", multiline && "admin-input--textarea"),
+    value: value ?? "",
+    placeholder,
+    onChange: (event) => onChange(event.target.value),
+  };
+
+  return e(
+    "label",
+    { className: classNames("admin-field", className) },
+    hideLabel
+      ? null
+      : e("span", { className: "admin-field__label" }, label),
+    multiline
+      ? e("textarea", { ...commonProps, rows })
+      : e("input", { ...commonProps, type }),
+    hint ? e("small", { className: "admin-field__hint" }, hint) : null
+  );
+}
+
+function AdminPanel({ title, description, action, children }) {
+  return e(
+    "section",
+    { className: "panel admin-panel" },
+    e(
+      "div",
+      { className: "admin-panel__head" },
+      e(
+        "div",
+        { className: "admin-panel__copy" },
+        e("h2", { className: "admin-panel__title" }, title),
+        description
+          ? e("p", { className: "admin-panel__description" }, description)
+          : null
+      ),
+      action ? e("div", { className: "admin-panel__action" }, action) : null
+    ),
+    children
+  );
+}
+
+function AdminActionButton({ label, onClick, disabled, tone = "default" }) {
+  return e(
+    "button",
+    {
+      type: "button",
+      className: classNames(
+        "admin-action-button",
+        tone === "danger" && "admin-action-button--danger"
+      ),
+      onClick,
+      disabled,
+    },
+    label
+  );
+}
+
+function StringListEditor({
+  label,
+  items,
+  onAdd,
+  onUpdate,
+  onRemove,
+  onMove,
+  addLabel = "Add item",
+  emptyMessage = "No items added yet.",
+  placeholder = "",
+}) {
+  return e(
+    AdminPanel,
+    {
+      title: label,
+      description: `Manage the ${label.toLowerCase()} shown on the site.`,
+      action: e(
+        "button",
+        {
+          type: "button",
+          className: "btn btn--secondary admin-panel-button",
+          onClick: onAdd,
+        },
+        addLabel
+      ),
+    },
+    items.length
+      ? e(
+          "div",
+          { className: "admin-stack" },
+          items.map((item, index) =>
+            e(
+              "article",
+              { key: `${label}-${index}`, className: "admin-item" },
+              e(
+                "div",
+                { className: "admin-item__header" },
+                e(
+                  "div",
+                  { className: "admin-item__heading" },
+                  e(
+                    "p",
+                    { className: "admin-item__eyebrow" },
+                    `${label} ${index + 1}`
+                  ),
+                  e(
+                    "h3",
+                    { className: "admin-item__title" },
+                    item || "Untitled entry"
+                  )
+                ),
+                e(
+                  "div",
+                  { className: "admin-row-actions" },
+                  e(AdminActionButton, {
+                    label: "Up",
+                    onClick: () => onMove(index, -1),
+                    disabled: index === 0,
+                  }),
+                  e(AdminActionButton, {
+                    label: "Down",
+                    onClick: () => onMove(index, 1),
+                    disabled: index === items.length - 1,
+                  }),
+                  e(AdminActionButton, {
+                    label: "Remove",
+                    onClick: () => onRemove(index),
+                    tone: "danger",
+                  })
+                )
+              ),
+              e(AdminField, {
+                label: `${label} ${index + 1}`,
+                value: item,
+                onChange: (value) => onUpdate(index, value),
+                placeholder,
+                hideLabel: true,
+              })
+            )
+          )
+        )
+      : e("p", { className: "admin-empty" }, emptyMessage)
+  );
+}
+
+function CollectionEditor({
+  title,
+  description,
+  itemLabel,
+  items,
+  onAdd,
+  onUpdate,
+  onRemove,
+  onMove,
+  getItemTitle,
+  renderFields,
+  addLabel = "Add item",
+  emptyMessage = "No items added yet.",
+}) {
+  return e(
+    AdminPanel,
+    {
+      title,
+      description,
+      action: e(
+        "button",
+        {
+          type: "button",
+          className: "btn btn--secondary admin-panel-button",
+          onClick: onAdd,
+        },
+        addLabel
+      ),
+    },
+    items.length
+      ? e(
+          "div",
+          { className: "admin-stack" },
+          items.map((item, index) =>
+            e(
+              "article",
+              { key: `${itemLabel}-${index}`, className: "admin-item" },
+              e(
+                "div",
+                { className: "admin-item__header" },
+                e(
+                  "div",
+                  { className: "admin-item__heading" },
+                  e(
+                    "p",
+                    { className: "admin-item__eyebrow" },
+                    `${itemLabel} ${index + 1}`
+                  ),
+                  e(
+                    "h3",
+                    { className: "admin-item__title" },
+                    getItemTitle(item, index)
+                  )
+                ),
+                e(
+                  "div",
+                  { className: "admin-row-actions" },
+                  e(AdminActionButton, {
+                    label: "Up",
+                    onClick: () => onMove(index, -1),
+                    disabled: index === 0,
+                  }),
+                  e(AdminActionButton, {
+                    label: "Down",
+                    onClick: () => onMove(index, 1),
+                    disabled: index === items.length - 1,
+                  }),
+                  e(AdminActionButton, {
+                    label: "Remove",
+                    onClick: () => onRemove(index),
+                    tone: "danger",
+                  })
+                )
+              ),
+              e(
+                "div",
+                { className: "admin-grid" },
+                renderFields(item, index, onUpdate)
+              )
+            )
+          )
+        )
+      : e("p", { className: "admin-empty" }, emptyMessage)
+  );
 }
 
 function Section({ id, eyebrow, title, lead, alternate, children }) {
@@ -210,17 +351,156 @@ function ServiceCard({ title, description, outcomes }) {
     e(
       "ul",
       { className: "tag-list", "aria-label": `${title} outcomes` },
-      outcomes.map((item) =>
-        e("li", { key: item, className: "tag" }, item)
-      )
+      outcomes.map((item) => e("li", { key: item, className: "tag" }, item))
     )
   );
 }
 
-function ProjectCard({ title, industry, summary, results }) {
+function getVideoEmbedInfo(videoUrl) {
+  if (!videoUrl) {
+    return null;
+  }
+
+  const normalizedUrl = videoUrl.trim();
+
+  if (!normalizedUrl) {
+    return null;
+  }
+
+  if (/\.(mp4|webm|ogg)(\?|#|$)/i.test(normalizedUrl)) {
+    return { type: "file", src: normalizedUrl };
+  }
+
+  try {
+    const parsedUrl = new URL(normalizedUrl);
+    const hostname = parsedUrl.hostname.replace(/^www\./, "");
+
+    if (hostname === "youtu.be") {
+      const videoId = parsedUrl.pathname.replace("/", "");
+
+      if (videoId) {
+        return {
+          type: "iframe",
+          src: `https://www.youtube.com/embed/${videoId}`,
+        };
+      }
+    }
+
+    if (hostname === "youtube.com" || hostname === "m.youtube.com") {
+      if (parsedUrl.pathname === "/watch") {
+        const videoId = parsedUrl.searchParams.get("v");
+
+        if (videoId) {
+          return {
+            type: "iframe",
+            src: `https://www.youtube.com/embed/${videoId}`,
+          };
+        }
+      }
+
+      if (parsedUrl.pathname.startsWith("/embed/")) {
+        return { type: "iframe", src: normalizedUrl };
+      }
+    }
+
+    if (hostname === "vimeo.com") {
+      const videoId = parsedUrl.pathname.split("/").filter(Boolean)[0];
+
+      if (videoId) {
+        return {
+          type: "iframe",
+          src: `https://player.vimeo.com/video/${videoId}`,
+        };
+      }
+    }
+
+    if (hostname === "player.vimeo.com") {
+      return { type: "iframe", src: normalizedUrl };
+    }
+  } catch (error) {
+    return null;
+  }
+
+  return null;
+}
+
+function ProjectCard({
+  title,
+  industry,
+  imageUrl,
+  imageAlt,
+  videoUrl,
+  videoTitle,
+  summary,
+  results,
+}) {
+  const videoEmbed = getVideoEmbedInfo(videoUrl);
+
   return e(
     "article",
     { className: "panel project-card" },
+    e(
+      "div",
+      { className: "project-media-grid" },
+      e(
+        "div",
+        { className: "project-visual" },
+        imageUrl
+          ? e("img", {
+              src: imageUrl,
+              alt: imageAlt || `${title} preview`,
+              className: "project-visual__image",
+              loading: "lazy",
+            })
+          : e(
+              "div",
+              { className: "project-visual__placeholder" },
+              e("span", { className: "project-media-label" }, "Image Placeholder"),
+              e("strong", null, title),
+              e(
+                "p",
+                null,
+                "Add a project screenshot, mockup, or branded visual from the admin dashboard."
+              )
+            )
+      ),
+      e(
+        "div",
+        { className: "project-video-shell" },
+        e("span", { className: "project-media-label" }, "Video Section"),
+        videoEmbed
+          ? e(
+              "div",
+              { className: "project-video-frame" },
+              videoEmbed.type === "file"
+                ? e("video", {
+                    controls: true,
+                    className: "project-video",
+                    src: videoEmbed.src,
+                    title: videoTitle || `${title} video walkthrough`,
+                  })
+                : e("iframe", {
+                    src: videoEmbed.src,
+                    title: videoTitle || `${title} video walkthrough`,
+                    loading: "lazy",
+                    allow:
+                      "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share",
+                    allowFullScreen: true,
+                    referrerPolicy: "strict-origin-when-cross-origin",
+                  })
+            )
+          : e(
+              "div",
+              { className: "project-video-placeholder" },
+              e("strong", null, "Video walkthrough ready"),
+              e(
+                "p",
+                null,
+                "Paste a YouTube, Vimeo, or direct MP4 URL in the dashboard to activate this section."
+              )
+            )
+      )
+    ),
     e("p", { className: "card-kicker" }, industry),
     e("h3", { className: "card-title" }, title),
     e("p", { className: "card-copy" }, summary),
@@ -274,19 +554,995 @@ function FaqItem({ item, open, onToggle }) {
         "aria-expanded": open,
       },
       e("span", null, item.question),
-      e("span", { className: "faq-symbol", "aria-hidden": "true" }, open ? "-" : "+")
+      e(
+        "span",
+        { className: "faq-symbol", "aria-hidden": "true" },
+        open ? "-" : "+"
+      )
     ),
     e("div", { className: "faq-answer" }, e("p", null, item.answer))
   );
 }
 
-export function App() {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [activeFaq, setActiveFaq] = useState(0);
-  const [formData, setFormData] = useState(initialForm);
-  const [formState, setFormState] = useState({ type: "idle", message: "" });
+function AdminDashboard({
+  content,
+  onValueChange,
+  onArrayItemChange,
+  onAddArrayItem,
+  onRemoveArrayItem,
+  onMoveArrayItem,
+  onReplaceContent,
+}) {
+  const [activeTab, setActiveTab] = useState("brand");
+  const [statusMessage, setStatusMessage] = useState(
+    "Changes auto-save in this browser."
+  );
+  const fileInputRef = useRef(null);
+
+  const tabs = [
+    { id: "brand", label: "Brand" },
+    { id: "navigation", label: "Navigation" },
+    { id: "hero", label: "Hero" },
+    { id: "services", label: "Services" },
+    { id: "work", label: "Work" },
+    { id: "process", label: "Process" },
+    { id: "testimonials", label: "Testimonials" },
+    { id: "faq", label: "FAQ" },
+    { id: "contact", label: "Contact" },
+    { id: "footer", label: "Footer" },
+  ];
 
   useEffect(() => {
+    setStatusMessage("Changes auto-save in this browser.");
+  }, [activeTab]);
+
+  function triggerImport() {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  }
+
+  function exportContent() {
+    const blob = new Blob([JSON.stringify(content, null, 2)], {
+      type: "application/json",
+    });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = downloadUrl;
+    link.download = "techreion-content.json";
+    link.click();
+
+    window.URL.revokeObjectURL(downloadUrl);
+    setStatusMessage("Content exported as techreion-content.json.");
+  }
+
+  async function importContent(event) {
+    const file = event.target.files && event.target.files[0];
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const fileText = await file.text();
+      const parsedContent = JSON.parse(fileText);
+      onReplaceContent(normalizeContent(parsedContent));
+      setStatusMessage("Content imported successfully.");
+    } catch (error) {
+      setStatusMessage("Import failed. Please choose a valid JSON file.");
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  function resetContent() {
+    const confirmed = window.confirm(
+      "Reset all site content to the default Techreion copy?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    window.localStorage.removeItem(CONTENT_STORAGE_KEY);
+    onReplaceContent(cloneData(defaultContent));
+    setStatusMessage("Content reset to defaults.");
+  }
+
+  function renderSectionMetaEditor(sectionKey, title) {
+    const sectionValue = content.sections[sectionKey];
+
+    return e(
+      AdminPanel,
+      {
+        title,
+        description: "Edit the section label, heading, and supporting copy.",
+      },
+      e(
+        "div",
+        { className: "admin-grid" },
+        e(AdminField, {
+          key: `${sectionKey}-eyebrow`,
+          label: "Eyebrow",
+          value: sectionValue.eyebrow,
+          onChange: (value) =>
+            onValueChange(["sections", sectionKey, "eyebrow"], value),
+        }),
+        e(AdminField, {
+          key: `${sectionKey}-title`,
+          label: "Title",
+          value: sectionValue.title,
+          onChange: (value) =>
+            onValueChange(["sections", sectionKey, "title"], value),
+        }),
+        e(AdminField, {
+          key: `${sectionKey}-lead`,
+          label: "Lead text",
+          value: sectionValue.lead,
+          multiline: true,
+          rows: 4,
+          className: "admin-field--full",
+          onChange: (value) =>
+            onValueChange(["sections", sectionKey, "lead"], value),
+        })
+      )
+    );
+  }
+
+  function renderActiveTab() {
+    if (activeTab === "brand") {
+      return [
+        e(
+          AdminPanel,
+          {
+            key: "brand-meta",
+            title: "Brand and metadata",
+            description:
+              "Manage the core brand details and metadata used across the public site.",
+          },
+          e(
+            "div",
+            { className: "admin-grid" },
+            e(AdminField, {
+              key: "site-name",
+              label: "Platform name",
+              value: content.siteConfig.name,
+              onChange: (value) => onValueChange(["siteConfig", "name"], value),
+            }),
+            e(AdminField, {
+              key: "site-mark",
+              label: "Brand mark",
+              value: content.siteConfig.mark,
+              onChange: (value) => onValueChange(["siteConfig", "mark"], value),
+              hint: "Used as the fallback initials when no logo image is set.",
+            }),
+            e(AdminField, {
+              key: "site-logo-url",
+              label: "Logo image URL",
+              type: "url",
+              value: content.siteConfig.logoUrl,
+              onChange: (value) =>
+                onValueChange(["siteConfig", "logoUrl"], value),
+              hint: "Shown beside the platform name in the top-left header.",
+            }),
+            e(AdminField, {
+              key: "site-logo-alt",
+              label: "Logo alt text",
+              value: content.siteConfig.logoAlt,
+              onChange: (value) =>
+                onValueChange(["siteConfig", "logoAlt"], value),
+            }),
+            e(AdminField, {
+              key: "site-tagline",
+              label: "Brand tagline",
+              value: content.siteConfig.tagline,
+              onChange: (value) =>
+                onValueChange(["siteConfig", "tagline"], value),
+            }),
+            e(AdminField, {
+              key: "site-email",
+              label: "Contact email",
+              type: "email",
+              value: content.siteConfig.email,
+              onChange: (value) =>
+                onValueChange(["siteConfig", "email"], value),
+            }),
+            e(AdminField, {
+              key: "site-location",
+              label: "Location",
+              value: content.siteConfig.location,
+              onChange: (value) =>
+                onValueChange(["siteConfig", "location"], value),
+            }),
+            e(AdminField, {
+              key: "site-response",
+              label: "Response time",
+              value: content.siteConfig.responseTime,
+              onChange: (value) =>
+                onValueChange(["siteConfig", "responseTime"], value),
+            }),
+            e(AdminField, {
+              key: "site-calendar",
+              label: "Booking URL",
+              type: "url",
+              value: content.siteConfig.calendarUrl,
+              onChange: (value) =>
+                onValueChange(["siteConfig", "calendarUrl"], value),
+              hint: "Leave blank to keep buttons linked to the contact section.",
+              className: "admin-field--full",
+            }),
+            e(AdminField, {
+              key: "seo-title",
+              label: "SEO title",
+              value: content.seo.title,
+              onChange: (value) => onValueChange(["seo", "title"], value),
+              className: "admin-field--full",
+            }),
+            e(AdminField, {
+              key: "seo-description",
+              label: "SEO description",
+              value: content.seo.description,
+              multiline: true,
+              rows: 4,
+              onChange: (value) =>
+                onValueChange(["seo", "description"], value),
+              className: "admin-field--full",
+            }),
+            e(AdminField, {
+              key: "seo-theme",
+              label: "Theme color",
+              value: content.seo.themeColor,
+              onChange: (value) => onValueChange(["seo", "themeColor"], value),
+            })
+          )
+        ),
+      ];
+    }
+
+    if (activeTab === "navigation") {
+      return [
+        e(CollectionEditor, {
+          key: "navigation-items",
+          title: "Navigation links",
+          description:
+            "Control the links shown in the site header and footer.",
+          itemLabel: "Link",
+          items: content.navItems,
+          addLabel: "Add link",
+          onAdd: () =>
+            onAddArrayItem(["navItems"], cloneData(itemTemplates.navItem)),
+          onUpdate: (index, field, value) =>
+            onValueChange(["navItems", index, field], value),
+          onRemove: (index) => onRemoveArrayItem(["navItems"], index),
+          onMove: (index, direction) =>
+            onMoveArrayItem(["navItems"], index, direction),
+          getItemTitle: (item) => item.label || "Untitled link",
+          renderFields: (item, index, handleUpdate) => [
+            e(AdminField, {
+              key: `nav-label-${index}`,
+              label: "Label",
+              value: item.label,
+              onChange: (value) => handleUpdate(index, "label", value),
+            }),
+            e(AdminField, {
+              key: `nav-href-${index}`,
+              label: "Href",
+              value: item.href,
+              onChange: (value) => handleUpdate(index, "href", value),
+              hint: "Use anchors like #services or a full external URL.",
+            }),
+          ],
+        }),
+      ];
+    }
+
+    if (activeTab === "hero") {
+      return [
+        e(
+          AdminPanel,
+          {
+            key: "hero-copy",
+            title: "Hero content",
+            description:
+              "Edit the opening section, CTA labels, and hero panel messaging.",
+          },
+          e(
+            "div",
+            { className: "admin-grid" },
+            e(AdminField, {
+              key: "hero-eyebrow",
+              label: "Eyebrow",
+              value: content.hero.eyebrow,
+              onChange: (value) => onValueChange(["hero", "eyebrow"], value),
+            }),
+            e(AdminField, {
+              key: "hero-primary-cta",
+              label: "Primary CTA label",
+              value: content.hero.primaryCtaLabel,
+              onChange: (value) =>
+                onValueChange(["hero", "primaryCtaLabel"], value),
+            }),
+            e(AdminField, {
+              key: "hero-title",
+              label: "Main title",
+              value: content.hero.title,
+              multiline: true,
+              rows: 4,
+              onChange: (value) => onValueChange(["hero", "title"], value),
+              className: "admin-field--full",
+            }),
+            e(AdminField, {
+              key: "hero-lead",
+              label: "Lead copy",
+              value: content.hero.lead,
+              multiline: true,
+              rows: 5,
+              onChange: (value) => onValueChange(["hero", "lead"], value),
+              className: "admin-field--full",
+            }),
+            e(AdminField, {
+              key: "hero-secondary-cta",
+              label: "Secondary CTA label",
+              value: content.hero.secondaryCtaLabel,
+              onChange: (value) =>
+                onValueChange(["hero", "secondaryCtaLabel"], value),
+            }),
+            e(AdminField, {
+              key: "hero-panel-kicker",
+              label: "Panel kicker",
+              value: content.hero.panelKicker,
+              onChange: (value) =>
+                onValueChange(["hero", "panelKicker"], value),
+            }),
+            e(AdminField, {
+              key: "hero-panel-title",
+              label: "Panel title",
+              value: content.hero.panelTitle,
+              multiline: true,
+              rows: 3,
+              onChange: (value) => onValueChange(["hero", "panelTitle"], value),
+              className: "admin-field--full",
+            })
+          )
+        ),
+        e(StringListEditor, {
+          key: "hero-pills",
+          label: "Trust pills",
+          items: content.hero.trustPills,
+          addLabel: "Add pill",
+          placeholder: "Short trust statement",
+          onAdd: () => onAddArrayItem(["hero", "trustPills"], "New trust pill"),
+          onUpdate: (index, value) =>
+            onArrayItemChange(["hero", "trustPills"], index, value),
+          onRemove: (index) => onRemoveArrayItem(["hero", "trustPills"], index),
+          onMove: (index, direction) =>
+            onMoveArrayItem(["hero", "trustPills"], index, direction),
+        }),
+        e(StringListEditor, {
+          key: "hero-panel-items",
+          label: "Hero panel bullets",
+          items: content.hero.panelItems,
+          addLabel: "Add bullet",
+          placeholder: "Describe a need or outcome",
+          onAdd: () => onAddArrayItem(["hero", "panelItems"], "New panel point"),
+          onUpdate: (index, value) =>
+            onArrayItemChange(["hero", "panelItems"], index, value),
+          onRemove: (index) => onRemoveArrayItem(["hero", "panelItems"], index),
+          onMove: (index, direction) =>
+            onMoveArrayItem(["hero", "panelItems"], index, direction),
+        }),
+        e(CollectionEditor, {
+          key: "hero-stats",
+          title: "Hero stats",
+          description: "Edit the numeric highlights shown in the hero panel.",
+          itemLabel: "Stat",
+          items: content.hero.stats,
+          addLabel: "Add stat",
+          onAdd: () =>
+            onAddArrayItem(["hero", "stats"], cloneData(itemTemplates.heroStat)),
+          onUpdate: (index, field, value) =>
+            onValueChange(["hero", "stats", index, field], value),
+          onRemove: (index) => onRemoveArrayItem(["hero", "stats"], index),
+          onMove: (index, direction) =>
+            onMoveArrayItem(["hero", "stats"], index, direction),
+          getItemTitle: (item) => item.label || "Untitled stat",
+          renderFields: (item, index, handleUpdate) => [
+            e(AdminField, {
+              key: `hero-stat-value-${index}`,
+              label: "Value",
+              value: item.value,
+              onChange: (value) => handleUpdate(index, "value", value),
+            }),
+            e(AdminField, {
+              key: `hero-stat-label-${index}`,
+              label: "Label",
+              value: item.label,
+              onChange: (value) => handleUpdate(index, "label", value),
+            }),
+          ],
+        }),
+      ];
+    }
+
+    if (activeTab === "services") {
+      return [
+        e("div", { key: "services-meta" }, renderSectionMetaEditor("services", "Services section")),
+        e(CollectionEditor, {
+          key: "services-items",
+          title: "Service cards",
+          description:
+            "Manage service offerings and the outcome tags shown on each card.",
+          itemLabel: "Service",
+          items: content.services,
+          addLabel: "Add service",
+          onAdd: () =>
+            onAddArrayItem(["services"], cloneData(itemTemplates.service)),
+          onUpdate: (index, field, value) =>
+            onValueChange(["services", index, field], value),
+          onRemove: (index) => onRemoveArrayItem(["services"], index),
+          onMove: (index, direction) =>
+            onMoveArrayItem(["services"], index, direction),
+          getItemTitle: (item) => item.title || "Untitled service",
+          renderFields: (item, index, handleUpdate) => [
+            e(AdminField, {
+              key: `service-title-${index}`,
+              label: "Title",
+              value: item.title,
+              onChange: (value) => handleUpdate(index, "title", value),
+            }),
+            e(AdminField, {
+              key: `service-description-${index}`,
+              label: "Description",
+              value: item.description,
+              multiline: true,
+              rows: 4,
+              onChange: (value) => handleUpdate(index, "description", value),
+              className: "admin-field--full",
+            }),
+            e(
+              "div",
+              {
+                key: `service-outcomes-${index}`,
+                className: "admin-field admin-field--full",
+              },
+              e(
+                StringListEditor,
+                {
+                  label: "Outcome tags",
+                  items: item.outcomes,
+                  addLabel: "Add tag",
+                  placeholder: "Add an outcome tag",
+                  onAdd: () =>
+                    onAddArrayItem(["services", index, "outcomes"], "New outcome"),
+                  onUpdate: (outcomeIndex, value) =>
+                    onArrayItemChange(
+                      ["services", index, "outcomes"],
+                      outcomeIndex,
+                      value
+                    ),
+                  onRemove: (outcomeIndex) =>
+                    onRemoveArrayItem(["services", index, "outcomes"], outcomeIndex),
+                  onMove: (outcomeIndex, direction) =>
+                    onMoveArrayItem(
+                      ["services", index, "outcomes"],
+                      outcomeIndex,
+                      direction
+                    ),
+                }
+              )
+            ),
+          ],
+        }),
+      ];
+    }
+
+    if (activeTab === "work") {
+      return [
+        e("div", { key: "work-meta" }, renderSectionMetaEditor("work", "Work section")),
+        e(CollectionEditor, {
+          key: "projects-items",
+          title: "Project cards",
+          description:
+            "Edit portfolio examples, supporting copy, and visible results.",
+          itemLabel: "Project",
+          items: content.projects,
+          addLabel: "Add project",
+          onAdd: () =>
+            onAddArrayItem(["projects"], cloneData(itemTemplates.project)),
+          onUpdate: (index, field, value) =>
+            onValueChange(["projects", index, field], value),
+          onRemove: (index) => onRemoveArrayItem(["projects"], index),
+          onMove: (index, direction) =>
+            onMoveArrayItem(["projects"], index, direction),
+          getItemTitle: (item) => item.title || "Untitled project",
+          renderFields: (item, index, handleUpdate) => [
+            e(AdminField, {
+              key: `project-title-${index}`,
+              label: "Title",
+              value: item.title,
+              onChange: (value) => handleUpdate(index, "title", value),
+            }),
+            e(AdminField, {
+              key: `project-industry-${index}`,
+              label: "Industry",
+              value: item.industry,
+              onChange: (value) => handleUpdate(index, "industry", value),
+            }),
+            e(AdminField, {
+              key: `project-image-url-${index}`,
+              label: "Image URL",
+              type: "url",
+              value: item.imageUrl,
+              onChange: (value) => handleUpdate(index, "imageUrl", value),
+              hint: "Paste an image URL for the project preview.",
+            }),
+            e(AdminField, {
+              key: `project-image-alt-${index}`,
+              label: "Image alt text",
+              value: item.imageAlt,
+              onChange: (value) => handleUpdate(index, "imageAlt", value),
+            }),
+            e(AdminField, {
+              key: `project-video-url-${index}`,
+              label: "Video URL",
+              type: "url",
+              value: item.videoUrl,
+              onChange: (value) => handleUpdate(index, "videoUrl", value),
+              hint: "Supports YouTube, Vimeo, or direct MP4/WebM links.",
+              className: "admin-field--full",
+            }),
+            e(AdminField, {
+              key: `project-video-title-${index}`,
+              label: "Video title",
+              value: item.videoTitle,
+              onChange: (value) => handleUpdate(index, "videoTitle", value),
+            }),
+            e(AdminField, {
+              key: `project-summary-${index}`,
+              label: "Summary",
+              value: item.summary,
+              multiline: true,
+              rows: 4,
+              onChange: (value) => handleUpdate(index, "summary", value),
+              className: "admin-field--full",
+            }),
+            e(
+              "div",
+              {
+                key: `project-results-${index}`,
+                className: "admin-field admin-field--full",
+              },
+              e(StringListEditor, {
+                label: "Result bullets",
+                items: item.results,
+                addLabel: "Add result",
+                placeholder: "Add a visible result",
+                onAdd: () =>
+                  onAddArrayItem(["projects", index, "results"], "New result"),
+                onUpdate: (resultIndex, value) =>
+                  onArrayItemChange(
+                    ["projects", index, "results"],
+                    resultIndex,
+                    value
+                  ),
+                onRemove: (resultIndex) =>
+                  onRemoveArrayItem(["projects", index, "results"], resultIndex),
+                onMove: (resultIndex, direction) =>
+                  onMoveArrayItem(
+                    ["projects", index, "results"],
+                    resultIndex,
+                    direction
+                  ),
+              })
+            ),
+          ],
+        }),
+      ];
+    }
+
+    if (activeTab === "process") {
+      return [
+        e("div", { key: "process-meta" }, renderSectionMetaEditor("process", "Process section")),
+        e(CollectionEditor, {
+          key: "process-items",
+          title: "Process steps",
+          description:
+            "Edit the delivery sequence and supporting explanation for each step.",
+          itemLabel: "Step",
+          items: content.processSteps,
+          addLabel: "Add step",
+          onAdd: () =>
+            onAddArrayItem(["processSteps"], cloneData(itemTemplates.processStep)),
+          onUpdate: (index, field, value) =>
+            onValueChange(["processSteps", index, field], value),
+          onRemove: (index) => onRemoveArrayItem(["processSteps"], index),
+          onMove: (index, direction) =>
+            onMoveArrayItem(["processSteps"], index, direction),
+          getItemTitle: (item) => item.title || "Untitled step",
+          renderFields: (item, index, handleUpdate) => [
+            e(AdminField, {
+              key: `process-title-${index}`,
+              label: "Step title",
+              value: item.title,
+              onChange: (value) => handleUpdate(index, "title", value),
+            }),
+            e(AdminField, {
+              key: `process-copy-${index}`,
+              label: "Step copy",
+              value: item.copy,
+              multiline: true,
+              rows: 4,
+              onChange: (value) => handleUpdate(index, "copy", value),
+              className: "admin-field--full",
+            }),
+          ],
+        }),
+      ];
+    }
+
+    if (activeTab === "testimonials") {
+      return [
+        e(
+          "div",
+          { key: "testimonials-meta" },
+          renderSectionMetaEditor("testimonials", "Testimonials section")
+        ),
+        e(CollectionEditor, {
+          key: "testimonial-items",
+          title: "Testimonials",
+          description:
+            "Manage client quotes, names, and roles shown as proof points.",
+          itemLabel: "Testimonial",
+          items: content.testimonials,
+          addLabel: "Add testimonial",
+          onAdd: () =>
+            onAddArrayItem(
+              ["testimonials"],
+              cloneData(itemTemplates.testimonial)
+            ),
+          onUpdate: (index, field, value) =>
+            onValueChange(["testimonials", index, field], value),
+          onRemove: (index) => onRemoveArrayItem(["testimonials"], index),
+          onMove: (index, direction) =>
+            onMoveArrayItem(["testimonials"], index, direction),
+          getItemTitle: (item) => item.name || "Untitled testimonial",
+          renderFields: (item, index, handleUpdate) => [
+            e(AdminField, {
+              key: `testimonial-quote-${index}`,
+              label: "Quote",
+              value: item.quote,
+              multiline: true,
+              rows: 4,
+              onChange: (value) => handleUpdate(index, "quote", value),
+              className: "admin-field--full",
+            }),
+            e(AdminField, {
+              key: `testimonial-name-${index}`,
+              label: "Name",
+              value: item.name,
+              onChange: (value) => handleUpdate(index, "name", value),
+            }),
+            e(AdminField, {
+              key: `testimonial-role-${index}`,
+              label: "Role",
+              value: item.role,
+              onChange: (value) => handleUpdate(index, "role", value),
+            }),
+          ],
+        }),
+      ];
+    }
+
+    if (activeTab === "faq") {
+      return [
+        e("div", { key: "faq-meta" }, renderSectionMetaEditor("faq", "FAQ section")),
+        e(CollectionEditor, {
+          key: "faq-items",
+          title: "FAQ items",
+          description: "Add, remove, and reorder common questions.",
+          itemLabel: "Question",
+          items: content.faqs,
+          addLabel: "Add FAQ",
+          onAdd: () => onAddArrayItem(["faqs"], cloneData(itemTemplates.faq)),
+          onUpdate: (index, field, value) =>
+            onValueChange(["faqs", index, field], value),
+          onRemove: (index) => onRemoveArrayItem(["faqs"], index),
+          onMove: (index, direction) =>
+            onMoveArrayItem(["faqs"], index, direction),
+          getItemTitle: (item) => item.question || "Untitled question",
+          renderFields: (item, index, handleUpdate) => [
+            e(AdminField, {
+              key: `faq-question-${index}`,
+              label: "Question",
+              value: item.question,
+              onChange: (value) => handleUpdate(index, "question", value),
+            }),
+            e(AdminField, {
+              key: `faq-answer-${index}`,
+              label: "Answer",
+              value: item.answer,
+              multiline: true,
+              rows: 4,
+              onChange: (value) => handleUpdate(index, "answer", value),
+              className: "admin-field--full",
+            }),
+          ],
+        }),
+      ];
+    }
+
+    if (activeTab === "contact") {
+      return [
+        e(
+          "div",
+          { key: "contact-meta" },
+          renderSectionMetaEditor("contact", "Contact section")
+        ),
+        e(
+          AdminPanel,
+          {
+            key: "contact-copy",
+            title: "Contact cards and form",
+            description:
+              "Edit the static form label and the two supporting contact cards.",
+          },
+          e(
+            "div",
+            { className: "admin-grid" },
+            e(AdminField, {
+              key: "contact-button",
+              label: "Form button label",
+              value: content.contact.formButtonLabel,
+              onChange: (value) =>
+                onValueChange(["contact", "formButtonLabel"], value),
+            }),
+            e(AdminField, {
+              key: "contact-direct-kicker",
+              label: "Direct card kicker",
+              value: content.contact.directKicker,
+              onChange: (value) =>
+                onValueChange(["contact", "directKicker"], value),
+            }),
+            e(AdminField, {
+              key: "contact-direct-title",
+              label: "Direct card title",
+              value: content.contact.directTitle,
+              onChange: (value) =>
+                onValueChange(["contact", "directTitle"], value),
+            }),
+            e(AdminField, {
+              key: "contact-direct-copy",
+              label: "Direct card copy",
+              value: content.contact.directCopy,
+              multiline: true,
+              rows: 4,
+              onChange: (value) =>
+                onValueChange(["contact", "directCopy"], value),
+              className: "admin-field--full",
+            }),
+            e(AdminField, {
+              key: "contact-next-kicker",
+              label: "Next-step card kicker",
+              value: content.contact.nextStepKicker,
+              onChange: (value) =>
+                onValueChange(["contact", "nextStepKicker"], value),
+            }),
+            e(AdminField, {
+              key: "contact-next-title",
+              label: "Next-step card title",
+              value: content.contact.nextStepTitle,
+              onChange: (value) =>
+                onValueChange(["contact", "nextStepTitle"], value),
+            })
+          )
+        ),
+        e(StringListEditor, {
+          key: "contact-next-steps",
+          label: "Next-step bullets",
+          items: content.contact.nextSteps,
+          addLabel: "Add step",
+          placeholder: "Add the next step text",
+          onAdd: () =>
+            onAddArrayItem(["contact", "nextSteps"], "New next-step item"),
+          onUpdate: (index, value) =>
+            onArrayItemChange(["contact", "nextSteps"], index, value),
+          onRemove: (index) =>
+            onRemoveArrayItem(["contact", "nextSteps"], index),
+          onMove: (index, direction) =>
+            onMoveArrayItem(["contact", "nextSteps"], index, direction),
+        }),
+      ];
+    }
+
+    return [
+      e(
+        AdminPanel,
+        {
+          key: "footer-panel",
+          title: "Footer",
+          description: "Manage the footer copy shown beneath the navigation.",
+        },
+        e(
+          "div",
+          { className: "admin-grid" },
+          e(AdminField, {
+            key: "footer-blurb",
+            label: "Footer blurb",
+            value: content.footer.blurb,
+            multiline: true,
+            rows: 4,
+            className: "admin-field--full",
+            onChange: (value) => onValueChange(["footer", "blurb"], value),
+          })
+        )
+      ),
+    ];
+  }
+
+  return e(
+    "div",
+    { className: "admin-shell" },
+    e(
+      "main",
+      { id: "main-content", className: "admin-main" },
+      e(
+        "div",
+        { className: "container admin-layout" },
+        e(
+          "section",
+          { className: "panel admin-hero" },
+          e(
+            "div",
+            { className: "admin-hero__copy" },
+            e("p", { className: "eyebrow" }, "Content control center"),
+            e("h1", { className: "admin-hero__title" }, "Techreion admin dashboard"),
+            e(
+              "p",
+              { className: "admin-hero__lead" },
+              "Update the public site from one place. Every change is stored in this browser, and you can import or export the full content model as JSON."
+            )
+          ),
+          e(
+            "div",
+            { className: "admin-hero__actions" },
+            e("a", { href: "#page-top", className: "btn btn--secondary" }, "Back to site"),
+            e(
+              "button",
+              {
+                type: "button",
+                className: "btn btn--secondary",
+                onClick: triggerImport,
+              },
+              "Import JSON"
+            ),
+            e(
+              "button",
+              {
+                type: "button",
+                className: "btn btn--secondary",
+                onClick: exportContent,
+              },
+              "Export JSON"
+            ),
+            e(
+              "button",
+              {
+                type: "button",
+                className: "btn btn--primary",
+                onClick: resetContent,
+              },
+              "Reset defaults"
+            ),
+            e("input", {
+              ref: fileInputRef,
+              type: "file",
+              accept: "application/json",
+              className: "admin-file-input",
+              onChange: importContent,
+            })
+          ),
+          e(
+            "div",
+            { className: "admin-summary-grid" },
+            e(
+              "div",
+              { className: "admin-summary-card" },
+              e("strong", null, content.services.length),
+              e("span", null, "Services")
+            ),
+            e(
+              "div",
+              { className: "admin-summary-card" },
+              e("strong", null, content.projects.length),
+              e("span", null, "Projects")
+            ),
+            e(
+              "div",
+              { className: "admin-summary-card" },
+              e("strong", null, content.testimonials.length),
+              e("span", null, "Testimonials")
+            ),
+            e(
+              "div",
+              { className: "admin-summary-card" },
+              e("strong", null, content.faqs.length),
+              e("span", null, "FAQs")
+            )
+          ),
+          e("p", { className: "admin-status" }, statusMessage)
+        ),
+        e(
+          "aside",
+          { className: "panel admin-sidebar" },
+          e("p", { className: "card-kicker" }, "Dashboard sections"),
+          e(
+            "nav",
+            { className: "admin-tabs", "aria-label": "Admin sections" },
+            tabs.map((tab) =>
+              e(
+                "button",
+                {
+                  key: tab.id,
+                  type: "button",
+                  className: classNames(
+                    "admin-tab",
+                    activeTab === tab.id && "admin-tab--active"
+                  ),
+                  onClick: () => setActiveTab(tab.id),
+                },
+                tab.label
+              )
+            )
+          )
+        ),
+        e("div", { className: "admin-content" }, renderActiveTab())
+      )
+    )
+  );
+}
+
+export function App() {
+  const [content, setContent] = useState(() => loadStoredContent());
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [activeFaq, setActiveFaq] = useState(0);
+  const [formData, setFormData] = useState(() =>
+    createInitialForm(loadStoredContent())
+  );
+  const [formState, setFormState] = useState({ type: "idle", message: "" });
+  const [route, setRoute] = useState(() =>
+    typeof window !== "undefined" && window.location.hash === "#admin"
+      ? "admin"
+      : "site"
+  );
+
+  useEffect(() => {
+    applyMetadata(content);
+  }, [content]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(CONTENT_STORAGE_KEY, JSON.stringify(content));
+  }, [content]);
+
+  useEffect(() => {
+    function handleHashChange() {
+      setRoute(window.location.hash === "#admin" ? "admin" : "site");
+      setMobileOpen(false);
+    }
+
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  useEffect(() => {
+    if (route !== "site") {
+      return undefined;
+    }
+
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const elements = Array.from(document.querySelectorAll("[data-reveal]"));
 
@@ -310,7 +1566,7 @@ export function App() {
     elements.forEach((element) => observer.observe(element));
 
     return () => observer.disconnect();
-  }, []);
+  }, [route, content]);
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -322,6 +1578,73 @@ export function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (!content.faqs.length) {
+      setActiveFaq(-1);
+      return;
+    }
+
+    if (activeFaq >= content.faqs.length || activeFaq < 0) {
+      setActiveFaq(0);
+    }
+  }, [activeFaq, content.faqs.length]);
+
+  useEffect(() => {
+    const validService = content.services.some(
+      (service) => service.title === formData.service
+    );
+
+    if (validService) {
+      return;
+    }
+
+    setFormData((current) => ({
+      ...current,
+      service: content.services[0] ? content.services[0].title : "",
+    }));
+  }, [content.services, formData.service]);
+
+  function updateContentValue(path, value) {
+    setContent((current) => setValueAtPath(current, path, value));
+  }
+
+  function updateArrayItemValue(path, index, value) {
+    setContent((current) => {
+      const nextItems = getValueAtPath(current, path).slice();
+      nextItems[index] = value;
+      return setValueAtPath(current, path, nextItems);
+    });
+  }
+
+  function addArrayItem(path, item) {
+    setContent((current) => {
+      const nextItems = getValueAtPath(current, path).slice();
+      nextItems.push(item);
+      return setValueAtPath(current, path, nextItems);
+    });
+  }
+
+  function removeArrayItem(path, index) {
+    setContent((current) => {
+      const nextItems = getValueAtPath(current, path).slice();
+      nextItems.splice(index, 1);
+      return setValueAtPath(current, path, nextItems);
+    });
+  }
+
+  function moveArrayItem(path, index, direction) {
+    setContent((current) => {
+      const nextItems = moveItem(getValueAtPath(current, path), index, direction);
+      return setValueAtPath(current, path, nextItems);
+    });
+  }
+
+  function replaceContent(nextContent) {
+    setContent(nextContent);
+    setFormData(createInitialForm(nextContent));
+    setFormState({ type: "idle", message: "" });
+  }
 
   function handleFieldChange(event) {
     const { name, value } = event.target;
@@ -350,7 +1673,7 @@ export function App() {
       "Project brief:",
       formData.message.trim(),
       "",
-      "Sent from the Spider Agency website.",
+      `Sent from the ${content.siteConfig.name} website.`,
     ];
 
     const plainMessage = messageLines.join("\n");
@@ -367,21 +1690,33 @@ export function App() {
       // Clipboard access is optional. The mailto flow still works without it.
     }
 
-    window.location.href = `mailto:${siteConfig.email}?subject=${subject}&body=${body}`;
+    window.location.href = `mailto:${content.siteConfig.email}?subject=${subject}&body=${body}`;
 
     setFormState({
       type: "success",
       message:
         "Your email app should open now. We also copied the inquiry to your clipboard as a backup when allowed by your browser.",
     });
-    setFormData(initialForm);
+    setFormData(createInitialForm(content));
   }
 
   function closeMobileMenu() {
     setMobileOpen(false);
   }
 
-  const bookingHref = siteConfig.calendarUrl || "#contact";
+  if (route === "admin") {
+    return e(AdminDashboard, {
+      content,
+      onValueChange: updateContentValue,
+      onArrayItemChange: updateArrayItemValue,
+      onAddArrayItem: addArrayItem,
+      onRemoveArrayItem: removeArrayItem,
+      onMoveArrayItem: moveArrayItem,
+      onReplaceContent: replaceContent,
+    });
+  }
+
+  const bookingHref = content.siteConfig.calendarUrl || "#contact";
   const currentYear = new Date().getFullYear();
 
   return e(
@@ -396,22 +1731,37 @@ export function App() {
         e(
           "a",
           { href: "#page-top", className: "brand", onClick: closeMobileMenu },
-          e("span", { className: "brand-mark", "aria-hidden": "true" }, "SA"),
+          content.siteConfig.logoUrl
+            ? e(
+                "span",
+                { className: "brand-mark brand-mark--image" },
+                e("img", {
+                  src: content.siteConfig.logoUrl,
+                  alt: content.siteConfig.logoAlt || `${content.siteConfig.name} logo`,
+                  className: "brand-logo",
+                  loading: "eager",
+                })
+              )
+            : e(
+                "span",
+                { className: "brand-mark", "aria-hidden": "true" },
+                content.siteConfig.mark || "TR"
+              ),
           e(
             "span",
             { className: "brand-text" },
-            e("strong", null, siteConfig.name),
-            e("span", null, "AI systems, websites, and growth ops")
+            e("strong", null, content.siteConfig.name),
+            e("span", null, content.siteConfig.tagline)
           )
         ),
         e(
           "nav",
           { className: "nav-links", "aria-label": "Primary" },
-          navItems.map((item) =>
+          content.navItems.map((item) =>
             e(
               "a",
               {
-                key: item.href,
+                key: `${item.label}-${item.href}`,
                 href: item.href,
                 className: "nav-link",
                 onClick: closeMobileMenu,
@@ -435,8 +1785,14 @@ export function App() {
             e("span", null, "Menu")
           ),
           e(ActionLink, {
+            href: "#admin",
+            label: "Admin",
+            variant: "secondary",
+            onClick: closeMobileMenu,
+          }),
+          e(ActionLink, {
             href: bookingHref,
-            label: "Start a Project",
+            label: content.hero.primaryCtaLabel,
             onClick: closeMobileMenu,
           })
         )
@@ -450,11 +1806,11 @@ export function App() {
         e(
           "nav",
           { className: "mobile-menu__links", "aria-label": "Mobile" },
-          navItems.map((item) =>
+          content.navItems.map((item) =>
             e(
               "a",
               {
-                key: item.href,
+                key: `${item.label}-${item.href}`,
                 href: item.href,
                 className: "mobile-link",
                 onClick: closeMobileMenu,
@@ -464,7 +1820,13 @@ export function App() {
           ),
           e(ActionLink, {
             href: bookingHref,
-            label: "Book Discovery Call",
+            label: content.hero.secondaryCtaLabel,
+            variant: "secondary",
+            onClick: closeMobileMenu,
+          }),
+          e(ActionLink, {
+            href: "#admin",
+            label: "Open Admin Dashboard",
             variant: "secondary",
             onClick: closeMobileMenu,
           })
@@ -483,68 +1845,50 @@ export function App() {
           e(
             "div",
             { className: "hero-copy" },
-            e("p", { className: "eyebrow" }, "Built for serious client work"),
-            e(
-              "h1",
-              { className: "hero-title" },
-              "We build AI systems, websites, and automation that help agencies move faster and close better clients."
-            ),
-            e(
-              "p",
-              { className: "hero-lead" },
-              "Spider Agency helps service businesses and product teams turn messy ideas into clean delivery. Strategy, design, build, launch, and optimization all live in one execution flow."
-            ),
+            e("p", { className: "eyebrow" }, content.hero.eyebrow),
+            e("h1", { className: "hero-title" }, content.hero.title),
+            e("p", { className: "hero-lead" }, content.hero.lead),
             e(
               "div",
               { className: "cta-row" },
-              e(ActionLink, { href: "#contact", label: "Start a Project" }),
+              e(ActionLink, {
+                href: "#contact",
+                label: content.hero.primaryCtaLabel,
+              }),
               e(ActionLink, {
                 href: bookingHref,
-                label: "Book a Call",
+                label: content.hero.secondaryCtaLabel,
                 variant: "secondary",
               })
             ),
             e(
               "div",
               { className: "trust-row" },
-              e("span", { className: "trust-pill" }, "Launch-ready delivery"),
-              e("span", { className: "trust-pill" }, "Accessible and responsive"),
-              e("span", { className: "trust-pill" }, "Built for conversion")
+              content.hero.trustPills.map((item) =>
+                e("span", { key: item, className: "trust-pill" }, item)
+              )
             )
           ),
           e(
             "aside",
             { className: "panel hero-panel" },
-            e("p", { className: "card-kicker" }, "What clients usually need first"),
-            e("h2", { className: "card-title" }, "A sharper system, not just a prettier site."),
+            e("p", { className: "card-kicker" }, content.hero.panelKicker),
+            e("h2", { className: "card-title" }, content.hero.panelTitle),
             e(
               "ul",
               { className: "feature-list" },
-              e("li", null, "Clear offer positioning and stronger call-to-action paths"),
-              e("li", null, "Lead capture that routes inquiries to the right next step"),
-              e("li", null, "Automation that removes repetitive team handoffs"),
-              e("li", null, "A technical partner who can actually ship")
+              content.hero.panelItems.map((item) => e("li", { key: item }, item))
             ),
             e(
               "div",
               { className: "hero-stats" },
-              e(
-                "div",
-                { className: "stat-card" },
-                e("strong", null, "1"),
-                e("span", null, "Execution partner")
-              ),
-              e(
-                "div",
-                { className: "stat-card" },
-                e("strong", null, "3"),
-                e("span", null, "Core delivery tracks")
-              ),
-              e(
-                "div",
-                { className: "stat-card" },
-                e("strong", null, "24h"),
-                e("span", null, "Typical reply time")
+              content.hero.stats.map((stat) =>
+                e(
+                  "div",
+                  { key: `${stat.value}-${stat.label}`, className: "stat-card" },
+                  e("strong", null, stat.value),
+                  e("span", null, stat.label)
+                )
               )
             )
           )
@@ -554,15 +1898,14 @@ export function App() {
         Section,
         {
           id: "services",
-          eyebrow: "Services",
-          title: "What we can build with you",
-          lead:
-            "Choose a focused engagement or combine multiple tracks into one delivery plan.",
+          eyebrow: content.sections.services.eyebrow,
+          title: content.sections.services.title,
+          lead: content.sections.services.lead,
         },
         e(
           "div",
           { className: "service-grid" },
-          services.map((service) =>
+          content.services.map((service) =>
             e(ServiceCard, {
               key: service.title,
               title: service.title,
@@ -576,20 +1919,23 @@ export function App() {
         Section,
         {
           id: "work",
-          eyebrow: "Selected Work",
-          title: "Built for business outcomes, not portfolio filler",
-          lead:
-            "These examples show the kinds of problems we solve: clarity, speed, conversion, and operational cleanup.",
+          eyebrow: content.sections.work.eyebrow,
+          title: content.sections.work.title,
+          lead: content.sections.work.lead,
           alternate: true,
         },
         e(
           "div",
           { className: "project-grid" },
-          projects.map((project) =>
+          content.projects.map((project) =>
             e(ProjectCard, {
               key: project.title,
               title: project.title,
               industry: project.industry,
+              imageUrl: project.imageUrl,
+              imageAlt: project.imageAlt,
+              videoUrl: project.videoUrl,
+              videoTitle: project.videoTitle,
               summary: project.summary,
               results: project.results,
             })
@@ -600,17 +1946,16 @@ export function App() {
         Section,
         {
           id: "process",
-          eyebrow: "Process",
-          title: "A calm delivery system from first call to launch",
-          lead:
-            "You should always know what is being built, why it matters, and what comes next.",
+          eyebrow: content.sections.process.eyebrow,
+          title: content.sections.process.title,
+          lead: content.sections.process.lead,
         },
         e(
           "div",
           { className: "process-grid" },
-          processSteps.map((step, index) =>
+          content.processSteps.map((step, index) =>
             e(ProcessCard, {
-              key: step.title,
+              key: `${step.title}-${index}`,
               index,
               title: step.title,
               copy: step.copy,
@@ -622,18 +1967,17 @@ export function App() {
         Section,
         {
           id: "testimonials",
-          eyebrow: "Proof",
-          title: "Clients trust us to make progress visible",
-          lead:
-            "Good work matters, but so does communication. The experience should feel steady from start to finish.",
+          eyebrow: content.sections.testimonials.eyebrow,
+          title: content.sections.testimonials.title,
+          lead: content.sections.testimonials.lead,
           alternate: true,
         },
         e(
           "div",
           { className: "testimonial-grid" },
-          testimonials.map((item) =>
+          content.testimonials.map((item, index) =>
             e(TestimonialCard, {
-              key: item.name,
+              key: `${item.name}-${index}`,
               quote: item.quote,
               name: item.name,
               role: item.role,
@@ -645,17 +1989,16 @@ export function App() {
         Section,
         {
           id: "faq",
-          eyebrow: "FAQ",
-          title: "A few practical questions, answered",
-          lead:
-            "If your project is a little unusual, that is fine. We can scope the right approach together.",
+          eyebrow: content.sections.faq.eyebrow,
+          title: content.sections.faq.title,
+          lead: content.sections.faq.lead,
         },
         e(
           "div",
           { className: "faq-list" },
-          faqs.map((item, index) =>
+          content.faqs.map((item, index) =>
             e(FaqItem, {
-              key: item.question,
+              key: `${item.question}-${index}`,
               item,
               open: activeFaq === index,
               onToggle: () => setActiveFaq(activeFaq === index ? -1 : index),
@@ -667,10 +2010,9 @@ export function App() {
         Section,
         {
           id: "contact",
-          eyebrow: "Contact",
-          title: "Tell us what you are building",
-          lead:
-            "Use the form below and your email app will open with a ready-to-send inquiry. This keeps the site fully static while still giving you a working intake flow today.",
+          eyebrow: content.sections.contact.eyebrow,
+          title: content.sections.contact.title,
+          lead: content.sections.contact.lead,
           alternate: true,
         },
         e(
@@ -734,7 +2076,7 @@ export function App() {
                     value: formData.service,
                     onChange: handleFieldChange,
                   },
-                  services.map((service) =>
+                  content.services.map((service) =>
                     e(
                       "option",
                       { key: service.title, value: service.title },
@@ -801,14 +2143,18 @@ export function App() {
             e(
               "div",
               { className: "form-actions" },
-              e("button", { type: "submit", className: "btn btn--primary" }, "Send Inquiry"),
+              e(
+                "button",
+                { type: "submit", className: "btn btn--primary" },
+                content.contact.formButtonLabel
+              ),
               e(
                 "a",
                 {
-                  href: `mailto:${siteConfig.email}`,
+                  href: `mailto:${content.siteConfig.email}`,
                   className: "text-link",
                 },
-                siteConfig.email
+                content.siteConfig.email
               )
             )
           ),
@@ -818,32 +2164,39 @@ export function App() {
             e(
               "div",
               { className: "panel contact-card" },
-              e("p", { className: "card-kicker" }, "Direct contact"),
-              e("h3", { className: "card-title" }, "Prefer email first?"),
-              e(
-                "p",
-                { className: "card-copy" },
-                "That works too. Reach out directly and include your rough scope, timeline, and budget range if you have them."
-              ),
+              e("p", { className: "card-kicker" }, content.contact.directKicker),
+              e("h3", { className: "card-title" }, content.contact.directTitle),
+              e("p", { className: "card-copy" }, content.contact.directCopy),
               e(
                 "div",
                 { className: "contact-points" },
-                e("a", { href: `mailto:${siteConfig.email}`, className: "contact-point" }, siteConfig.email),
-                e("p", { className: "contact-meta" }, siteConfig.location),
-                e("p", { className: "contact-meta" }, siteConfig.responseTime)
+                e(
+                  "a",
+                  {
+                    href: `mailto:${content.siteConfig.email}`,
+                    className: "contact-point",
+                  },
+                  content.siteConfig.email
+                ),
+                e("p", { className: "contact-meta" }, content.siteConfig.location),
+                e(
+                  "p",
+                  { className: "contact-meta" },
+                  content.siteConfig.responseTime
+                )
               )
             ),
             e(
               "div",
               { className: "panel contact-card" },
-              e("p", { className: "card-kicker" }, "Next step"),
-              e("h3", { className: "card-title" }, "What happens after you reach out"),
+              e("p", { className: "card-kicker" }, content.contact.nextStepKicker),
+              e("h3", { className: "card-title" }, content.contact.nextStepTitle),
               e(
                 "ol",
                 { className: "next-step-list" },
-                e("li", null, "We review your inquiry and confirm fit."),
-                e("li", null, "We reply with next steps, questions, or a call invite."),
-                e("li", null, "If it makes sense, we scope the fastest useful version together.")
+                content.contact.nextSteps.map((item) =>
+                  e("li", { key: item }, item)
+                )
               )
             )
           )
@@ -859,29 +2212,26 @@ export function App() {
         e(
           "div",
           { className: "footer-copy" },
-          e("strong", null, siteConfig.name),
-          e(
-            "p",
-            null,
-            "Strategy, build, automation, and launch support for modern agencies and digital teams."
-          )
+          e("strong", null, content.siteConfig.name),
+          e("p", null, content.footer.blurb)
         ),
         e(
           "nav",
           { className: "footer-links", "aria-label": "Footer" },
-          navItems.map((item) =>
+          content.navItems.map((item) =>
             e(
               "a",
-              { key: item.href, href: item.href },
+              { key: `${item.label}-${item.href}`, href: item.href },
               item.label
             )
           ),
-          e("a", { href: `mailto:${siteConfig.email}` }, "Email")
+          e("a", { href: `mailto:${content.siteConfig.email}` }, "Email"),
+          e("a", { href: "#admin" }, "Admin")
         ),
         e(
           "p",
           { className: "footer-note" },
-          `Copyright ${currentYear} ${siteConfig.name}.`
+          `Copyright ${currentYear} ${content.siteConfig.name}.`
         )
       )
     )

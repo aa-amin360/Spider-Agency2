@@ -69,8 +69,9 @@ function initCanvas() {
         particle.size
       );
 
-      gradient.addColorStop(0, `rgba(102, 224, 197, ${particle.life * 0.35})`);
-      gradient.addColorStop(1, "rgba(102, 224, 197, 0)");
+      gradient.addColorStop(0, `rgba(77, 234, 255, ${particle.life * 0.32})`);
+      gradient.addColorStop(0.45, `rgba(15, 175, 154, ${particle.life * 0.2})`);
+      gradient.addColorStop(1, "rgba(77, 234, 255, 0)");
 
       ctx.fillStyle = gradient;
       ctx.beginPath();

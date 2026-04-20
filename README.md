@@ -1,6 +1,6 @@
-# Spider Agency
+# Techreion
 
-Static agency website for Spider Agency.
+Static agency website for Techreion.
 
 ## Run locally
 
@@ -19,6 +19,20 @@ npm run dev
 ```
 
 Vite will print the local URL, usually `http://localhost:5173`.
+
+## Admin dashboard
+
+Open `#admin` on the local site URL to access the built-in content dashboard.
+
+Example:
+
+`http://localhost:5173/#admin`
+
+The dashboard:
+
+- Lets you edit the main site content from one place
+- Auto-saves changes in your browser with `localStorage`
+- Supports JSON import/export for backups or moving content between browsers
 
 ## Update agency details
 
